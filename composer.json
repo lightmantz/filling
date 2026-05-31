@@ -1,0 +1,8 @@
+{
+    "require": {
+        "mpdf/mpdf": "^8.3",
+        "phpmailer/phpmailer": "^7.1",
+        "respect/validation": "^3.1",
+        "php-ffmpeg/php-ffmpeg": "^1.4"
+    }
+}

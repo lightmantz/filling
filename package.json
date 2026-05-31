@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "datatables.net-dt": "^2.3.8",
+    "dropzone": "^6.0.0-beta.2",
+    "flatpickr": "^4.6.13",
+    "fullcalendar": "^6.1.20",
+    "pdfjs-dist": "^5.6.205",
+    "qrcodejs2": "^0.0.2",
+    "quil": "^1.0.6",
+    "select2": "^4.0.13",
+    "tinymce": "^8.5.1",
+    "toastr": "^2.1.4"
+  }
+}

@@ -1,0 +1,23 @@
+# Ignore sensitive config files
+config/database.php
+config/session.php
+
+# Ignore uploads and backups
+assets/uploads/
+assets/backups/
+
+# Ignore logs
+logs/*.log
+
+# Ignore IDE / OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Ignore Composer dependencies (if you use Composer)
+vendor/
+composer.lock
+
+# Ignore node modules (if you use npm)
+node_modules/
