@@ -26,19 +26,83 @@ if (!function_exists('buildUrl')) {
 }
 
 /**
- * Generate unique document number
+ * Generate unique document number in format: PF/folio_number/day/month/year
+ * Example: PF/1/15/05/2026
  */
 function generateDocumentNumber($folder_id) {
     $conn = getConnection();
+    
+    // Get the next folio number for this folder
+    $folio_number = generateFolioNumber($folder_id);
+    
+    // Get current date components
+    $day = date('d');
+    $month = date('m');
     $year = date('Y');
-    $query = "SELECT COUNT(*) as count FROM documents WHERE folder_id = ? AND YEAR(created_at) = ?";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("ii", $folder_id, $year);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $count = $row['count'] + 1;
-    return sprintf("DOC-%s-%04d-%03d", $year, $folder_id, $count);
+    
+    // Format: PF/folio_number/day/month/year
+    $document_number = sprintf("PF/%d/%s/%s/%s", $folio_number, $day, $month, $year);
+    
+    // Check if this document number already exists (unlikely but possible)
+    $check_query = "SELECT id FROM documents WHERE document_number = ?";
+    $check_stmt = $conn->prepare($check_query);
+    $check_stmt->bind_param("s", $document_number);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        // Add a random suffix if duplicate (very rare)
+        $document_number .= "-" . rand(100, 999);
+    }
+    
+    return $document_number;
+}
+
+/**
+ * Alternative: Generate document number with sequential numbering across all documents
+ * Format: PF/sequential_number/day/month/year
+ */
+function generateDocumentNumberSequential() {
+    $conn = getConnection();
+    
+    // Get the next sequential number
+    $query = "SELECT COUNT(*) as count FROM documents";
+    $result = $conn->query($query);
+    $count = $result->fetch_assoc()['count'] + 1;
+    
+    // Get current date components
+    $day = date('d');
+    $month = date('m');
+    $year = date('Y');
+    
+    // Format: PF/sequential_number/day/month/year
+    return sprintf("PF/%d/%s/%s/%s", $count, $day, $month, $year);
+}
+
+/**
+ * Generate document number with custom prefix
+ * @param string $prefix - Custom prefix (default: PF)
+ * @param int $folder_id - Folder ID for folio numbering
+ */
+function generateDocumentNumberWithPrefix($prefix = 'PF', $folder_id = null) {
+    $conn = getConnection();
+    
+    if ($folder_id) {
+        $folio_number = generateFolioNumber($folder_id);
+    } else {
+        // Get sequential number across all documents
+        $query = "SELECT COUNT(*) as count FROM documents";
+        $result = $conn->query($query);
+        $folio_number = $result->fetch_assoc()['count'] + 1;
+    }
+    
+    // Get current date components
+    $day = date('d');
+    $month = date('m');
+    $year = date('Y');
+    
+    // Format: PREFIX/folio_number/day/month/year
+    return sprintf("%s/%d/%s/%s/%s", strtoupper($prefix), $folio_number, $day, $month, $year);
 }
 
 /**
@@ -248,7 +312,8 @@ function formatFileSize($bytes, $precision = 2) {
  */
 function getUserById($user_id) {
     $conn = getConnection();
-    $query = "SELECT id, username, full_name, email, role, department FROM users WHERE id = ?";
+    $query = "SELECT id, username, full_name, email, role, department, phone, is_active, created_at, last_login 
+              FROM users WHERE id = ?";
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -332,6 +397,35 @@ function formatDate($date, $format = null) {
     }
     $timestamp = is_string($date) ? strtotime($date) : $date;
     return date($format, $timestamp);
+}
+
+/**
+ * Format document number for display
+ */
+function formatDocumentNumber($document_number) {
+    if (empty($document_number)) {
+        return 'N/A';
+    }
+    // You can add additional formatting here if needed
+    return htmlspecialchars($document_number);
+}
+
+/**
+ * Parse document number to extract components
+ * Returns array with prefix, folio, day, month, year
+ */
+function parseDocumentNumber($document_number) {
+    $parts = explode('/', $document_number);
+    if (count($parts) == 5) {
+        return [
+            'prefix' => $parts[0],
+            'folio' => $parts[1],
+            'day' => $parts[2],
+            'month' => $parts[3],
+            'year' => $parts[4]
+        ];
+    }
+    return null;
 }
 
 /**
@@ -423,5 +517,64 @@ function displayFlashMessage() {
         unset($_SESSION['flash_message']);
         unset($_SESSION['flash_type']);
     }
+}
+
+/**
+ * Get document statistics for dashboard
+ */
+function getDocumentStatistics($user_id, $role) {
+    $conn = getConnection();
+    
+    if ($role === 'records_officer') {
+        $query = "SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) as in_review,
+                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+                    SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed
+                  FROM documents";
+    } elseif ($role === 'admin') {
+        $query = "SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status IN ('submitted', 'submitted_to_admin') THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'in_review' AND current_holder = $user_id THEN 1 ELSE 0 END) as assigned_to_me,
+                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+                  FROM documents";
+    } else {
+        $query = "SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status IN ('submitted', 'in_review', 'submitted_to_admin') THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+                  FROM documents WHERE submitted_by = $user_id";
+    }
+    
+    $result = $conn->query($query);
+    return $result->fetch_assoc();
+}
+
+/**
+ * Validate document number format
+ */
+function isValidDocumentNumber($document_number) {
+    // Check format: PF/123/15/05/2026
+    $pattern = '/^[A-Z]{2,3}\/\d+\/\d{2}\/\d{2}\/\d{4}$/';
+    return preg_match($pattern, $document_number);
+}
+
+/**
+ * Get next available folio number for a folder
+ */
+function getNextFolioNumber($folder_id) {
+    $conn = getConnection();
+    $query = "SELECT MAX(folio_number) as max_folio FROM documents WHERE folder_id = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $folder_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    return ($row['max_folio'] ?? 0) + 1;
 }
 ?>

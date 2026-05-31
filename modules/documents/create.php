@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $content = $_POST['content'];
     $is_confidential = isset($_POST['is_confidential']) ? 1 : 0;
     
-    // Generate document number and folio number
+    // Generate document number using new format
     $document_number = generateDocumentNumber($folder_id);
     $folio_number = generateFolioNumber($folder_id);
     
@@ -174,6 +174,26 @@ include_once '../../includes/sidebar.php';
         color: #666;
         font-size: 12px;
     }
+    
+    .document-number-preview {
+        background: #f0f7ff;
+        border: 1px solid #cce5ff;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 20px;
+    }
+    
+    .document-number-preview label {
+        font-weight: 600;
+        color: #004085;
+        margin-bottom: 5px;
+    }
+    
+    .preview-value {
+        font-family: monospace;
+        font-size: 16px;
+        color: #004085;
+    }
 </style>
 
 <div class="content-wrapper">
@@ -188,6 +208,15 @@ include_once '../../includes/sidebar.php';
     <?php endif; ?>
     
     <div class="form-container">
+        <!-- Document Number Preview -->
+        <div class="document-number-preview">
+            <label><i class="fas fa-info-circle"></i> Document Number Format:</label>
+            <div class="preview-value">
+                PF/[Folio]/[Day]/[Month]/[Year]
+            </div>
+            <small>Example: PF/1/15/05/2026</small>
+        </div>
+        
         <form method="POST" enctype="multipart/form-data">
             <div class="form-group">
                 <label>Select Folder *</label>
