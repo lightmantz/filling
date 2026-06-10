@@ -18,7 +18,44 @@ if (!isset($base_url)) {
 }
 $base_url = rtrim($base_url, '/');
 
-// Functions are now in functions.php - no need to redeclare
+// Helper function to clean URLs (remove multiple slashes)
+if (!function_exists('cleanUrl')) {
+    function cleanUrl($url) {
+        return preg_replace('#/+#', '/', $url);
+    }
+}
+
+// Helper function to build URL
+if (!function_exists('buildUrl')) {
+    function buildUrl($path) {
+        global $base_url;
+        $path = ltrim($path, '/');
+        return cleanUrl($base_url . '/' . $path);
+    }
+}
+
+// Get unread notification count
+$unread_count = 0;
+if ($is_logged_in && function_exists('getConnection')) {
+    try {
+        $conn = getConnection();
+        if ($conn) {
+            $query = "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0";
+            $stmt = $conn->prepare($query);
+            if ($stmt) {
+                $stmt->bind_param("i", $_SESSION['user_id']);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                if ($result) {
+                    $row = $result->fetch_assoc();
+                    $unread_count = $row['count'] ?? 0;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        $unread_count = 0;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -28,6 +65,9 @@ $base_url = rtrim($base_url, '/');
     <title><?php echo $page_title ?? 'Filing Management System'; ?></title>
     <link rel="stylesheet" href="<?php echo cleanUrl($base_url . '/assets/css/style.css'); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="manifest" href="<?php echo $base_url; ?>/manifest.json">
+    <link rel="icon" type="image/x-icon" href="<?php echo $base_url; ?>/assets/images/favicon.ico">
+    
     <style>
         * {
             margin: 0;
@@ -112,10 +152,6 @@ $base_url = rtrim($base_url, '/');
             font-size: 18px;
         }
         
-        .sidebar-menu .menu-icon {
-            margin-right: 10px;
-        }
-        
         .sidebar-menu .submenu {
             list-style: none;
             padding-left: 45px;
@@ -161,6 +197,117 @@ $base_url = rtrim($base_url, '/');
             display: none;
             cursor: pointer;
             font-size: 20px;
+        }
+        
+        /* Notification Area */
+        .notification-area {
+            position: relative;
+            margin-right: 15px;
+        }
+        
+        .notification-icon {
+            font-size: 20px;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.3s;
+            position: relative;
+        }
+        
+        .notification-icon:hover {
+            color: #667eea;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -8px;
+            right: -10px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            min-width: 18px;
+            text-align: center;
+        }
+        
+        .notification-dropdown {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            width: 350px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1000;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .notification-dropdown.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .notification-header {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .notification-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .notification-item:hover {
+            background: #f9f9f9;
+        }
+        
+        .notification-item.unread {
+            background: #f0f7ff;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 3px;
+            color: #333;
+        }
+        
+        .notification-message {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .notification-time {
+            font-size: 10px;
+            color: #999;
+        }
+        
+        .mark-all-read {
+            padding: 8px 15px;
+            text-align: center;
+            background: #f8f9fa;
+            font-size: 12px;
+            cursor: pointer;
+            color: #667eea;
+            border-top: 1px solid #eee;
+        }
+        
+        .mark-all-read:hover {
+            background: #e9ecef;
         }
         
         .user-menu {
@@ -240,6 +387,15 @@ $base_url = rtrim($base_url, '/');
             .content-wrapper {
                 padding: 20px;
             }
+            
+            .notification-dropdown {
+                width: 300px;
+                right: -50px;
+            }
+            
+            .user-details {
+                display: none;
+            }
         }
         
         /* Scrollbar Styling */
@@ -253,6 +409,19 @@ $base_url = rtrim($base_url, '/');
         
         .sidebar::-webkit-scrollbar-thumb {
             background: rgba(255,255,255,0.3);
+            border-radius: 5px;
+        }
+        
+        .notification-dropdown::-webkit-scrollbar {
+            width: 5px;
+        }
+        
+        .notification-dropdown::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        .notification-dropdown::-webkit-scrollbar-thumb {
+            background: #888;
             border-radius: 5px;
         }
         
@@ -278,7 +447,43 @@ $base_url = rtrim($base_url, '/');
             border-top: 1px solid #e0e0e0;
             margin-top: 30px;
         }
+        
+        /* Empty State */
+        .empty-notifications {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+        
+        .empty-notifications i {
+            font-size: 48px;
+            margin-bottom: 10px;
+            color: #ddd;
+        }
+        
+        /* Role Badges */
+        .role-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .role-super_admin { background: #e74c3c; color: white; }
+        .role-records_officer { background: #3498db; color: white; }
+        .role-admin { background: #f39c12; color: white; }
+        .role-user { background: #27ae60; color: white; }
     </style>
 </head>
 <body>
 <div class="app-container">
+
+<script>
+// Pass PHP variables to JavaScript for notification system
+window.isLoggedIn = <?php echo $is_logged_in ? 'true' : 'false'; ?>;
+window.baseUrl = '<?php echo $base_url; ?>';
+window.userId = <?php echo $_SESSION['user_id'] ?? 'null'; ?>;
+window.userRole = '<?php echo $_SESSION['user_role'] ?? ''; ?>';
+window.unreadCount = <?php echo $unread_count; ?>;
+</script>

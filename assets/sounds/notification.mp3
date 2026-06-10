@@ -1,0 +1,17 @@
+// Fallback beep sound using Web Audio API
+function beep() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 880;
+    gainNode.gain.value = 0.3;
+    
+    oscillator.start();
+    setTimeout(() => {
+        oscillator.stop();
+    }, 200);
+}

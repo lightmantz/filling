@@ -1,10 +1,16 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('records_officer');
 require_once '../../includes/functions.php';
 
 $conn = getConnection();
+$user_role = $_SESSION['user_role'];
+
+// Allow records_officer AND super_admin
+if ($user_role !== 'records_officer' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
 
 // Get all folders with document counts
 $query = "SELECT 

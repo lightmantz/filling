@@ -1,7 +1,6 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('admin');
 require_once '../../includes/functions.php';
 
 $page_title = 'Completed Reviews';
@@ -9,6 +8,13 @@ $base_url = '../../';
 
 $conn = getConnection();
 $user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['user_role'];
+
+// Allow admin AND super_admin
+if ($user_role !== 'admin' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
 
 $query = "SELECT d.*, f.name as folder_name, u.full_name as submitted_by_name,
           w.created_at as decision_date, w.action as decision
@@ -85,6 +91,16 @@ include_once '../../includes/sidebar.php';
         background: #667eea;
         color: white;
     }
+    
+    .btn-small {
+        display: inline-block;
+        padding: 4px 10px;
+        font-size: 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        background-color: #3498db;
+        color: white;
+    }
 </style>
 
 <div class="content-wrapper">
@@ -123,7 +139,7 @@ include_once '../../includes/sidebar.php';
                         </div>
                         
                         <div style="margin-top: 15px;">
-                            <a href="view.php?id=<?php echo $doc['id']; ?>" class="btn btn-small btn-primary">
+                            <a href="view.php?id=<?php echo $doc['id']; ?>" class="btn-small">
                                 <i class="fas fa-eye"></i> View Details
                             </a>
                         </div>

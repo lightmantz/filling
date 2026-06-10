@@ -1,7 +1,6 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('admin');
 require_once '../../includes/functions.php';
 
 $page_title = 'Assigned to Me';
@@ -9,6 +8,13 @@ $base_url = '../../';
 
 $conn = getConnection();
 $user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['user_role'];
+
+// Allow admin AND super_admin
+if ($user_role !== 'admin' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
 
 $query = "SELECT d.*, f.name as folder_name, u.full_name as submitted_by_name
           FROM documents d
@@ -72,6 +78,17 @@ include_once '../../includes/sidebar.php';
         display: flex;
         gap: 10px;
         margin-top: 15px;
+    }
+    
+    .btn {
+        display: inline-block;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.3s;
     }
     
     .btn-approve {

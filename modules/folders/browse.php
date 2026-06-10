@@ -151,7 +151,7 @@ include_once '../../includes/sidebar.php';
                         <p><i class="fas fa-file"></i> <?php echo $folder['document_count']; ?> documents</p>
                     </div>
                     <a href="view.php?id=<?php echo $folder['id']; ?>" class="btn btn-primary btn-block">
-                        <i class="fas fa-eye"></i> View Folder
+                        <i class="fas fa-eye"></i> Open Folder
                     </a>
                 </div>
             <?php endwhile; ?>

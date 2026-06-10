@@ -1,13 +1,19 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('records_officer');
 require_once '../../includes/functions.php';
 
 $page_title = 'Index Reports';
 $base_url = '../../';
 
 $conn = getConnection();
+$user_role = $_SESSION['user_role'];
+
+// Allow records_officer AND super_admin
+if ($user_role !== 'records_officer' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
 
 // Get report data
 $report_type = $_GET['type'] ?? 'summary';
@@ -79,6 +85,23 @@ include_once '../../includes/sidebar.php';
         font-weight: bold;
         margin-top: 10px;
     }
+    
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .data-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+    }
 </style>
 
 <div class="content-wrapper">
@@ -102,7 +125,6 @@ include_once '../../includes/sidebar.php';
         
         <?php if ($report_type == 'summary'): ?>
             <?php
-            // Get summary statistics
             $total_folders = $conn->query("SELECT COUNT(*) as count FROM folders")->fetch_assoc()['count'];
             $total_docs = $conn->query("SELECT COUNT(*) as count FROM documents")->fetch_assoc()['count'];
             $confidential = $conn->query("SELECT COUNT(*) as count FROM folders WHERE is_confidential = 1")->fetch_assoc()['count'];

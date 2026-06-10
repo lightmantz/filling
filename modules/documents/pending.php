@@ -1,7 +1,6 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('admin');
 require_once '../../includes/functions.php';
 
 $page_title = 'Pending Reviews';
@@ -9,6 +8,13 @@ $base_url = '../../';
 
 $conn = getConnection();
 $user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['user_role'];
+
+// Allow admin AND super_admin
+if ($user_role !== 'admin' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
 
 // Get all pending documents
 $query = "SELECT d.*, f.name as folder_name, u.full_name as submitted_by_name
@@ -103,15 +109,6 @@ include_once '../../includes/sidebar.php';
         background-color: #2980b9;
     }
     
-    .btn-secondary {
-        background-color: #95a5a6;
-        color: white;
-    }
-    
-    .btn-secondary:hover {
-        background-color: #7f8c8d;
-    }
-    
     .empty-state {
         text-align: center;
         padding: 50px;
@@ -155,11 +152,6 @@ include_once '../../includes/sidebar.php';
                         <a href="view.php?id=<?php echo $doc['id']; ?>" class="btn btn-primary">
                             <i class="fas fa-eye"></i> Review Document
                         </a>
-                        <?php if ($doc['status'] == 'submitted_to_admin' && $doc['current_holder'] == $user_id): ?>
-                            <a href="assign.php?id=<?php echo $doc['id']; ?>" class="btn btn-secondary">
-                                <i class="fas fa-user-plus"></i> Assign to Another
-                            </a>
-                        <?php endif; ?>
                     </div>
                 </div>
             <?php endwhile; ?>

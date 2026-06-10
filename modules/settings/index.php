@@ -1,13 +1,20 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('admin'); // Only admin can access settings
 require_once '../../includes/functions.php';
 
 $page_title = 'System Settings';
 $base_url = '../../';
 
 $conn = getConnection();
+$user_role = $_SESSION['user_role'];
+
+// Allow admin AND super_admin
+if ($user_role !== 'admin' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
+
 $success = '';
 $error = '';
 
@@ -17,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         if (strpos($key, 'setting_') === 0) {
             $setting_key = substr($key, 8);
             
-            // Handle boolean values
             if ($value === 'on' || $value === '1') {
                 $value = '1';
             } elseif ($value === 'off' || $value === '0') {
@@ -33,14 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
         }
     }
     
-    // Log the action
-    $log_query = "INSERT INTO audit_logs (user_id, action, details, ip_address) 
-                  VALUES (?, 'settings_updated', 'System settings were updated', ?)";
-    $stmt = $conn->prepare($log_query);
-    $ip = $_SERVER['REMOTE_ADDR'];
-    $stmt->bind_param("is", $_SESSION['user_id'], $ip);
-    $stmt->execute();
-    
+    auditLog($_SESSION['user_id'], 'settings_updated', 'System settings were updated');
     $success = "Settings updated successfully!";
 }
 
@@ -220,19 +219,6 @@ include_once '../../includes/sidebar.php';
         background: #229954;
     }
     
-    .btn-danger {
-        background: #dc3545;
-        color: white;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    
-    .btn-danger:hover {
-        background: #c82333;
-    }
-    
     .audit-table {
         width: 100%;
         border-collapse: collapse;
@@ -348,12 +334,10 @@ include_once '../../includes/sidebar.php';
                         <label>Time Zone</label>
                         <select name="setting_timezone">
                             <option value="UTC" <?php echo ($settings['timezone']['setting_value'] ?? 'UTC') == 'UTC' ? 'selected' : ''; ?>>UTC</option>
+                            <option value="Africa/Dar_es_Salaam" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'Africa/Dar_es_Salaam' ? 'selected' : ''; ?>>Dar es Salaam</option>
+                            <option value="Africa/Nairobi" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'Africa/Nairobi' ? 'selected' : ''; ?>>Nairobi</option>
                             <option value="America/New_York" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'America/New_York' ? 'selected' : ''; ?>>Eastern Time</option>
-                            <option value="America/Chicago" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'America/Chicago' ? 'selected' : ''; ?>>Central Time</option>
-                            <option value="America/Denver" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'America/Denver' ? 'selected' : ''; ?>>Mountain Time</option>
-                            <option value="America/Los_Angeles" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'America/Los_Angeles' ? 'selected' : ''; ?>>Pacific Time</option>
                             <option value="Europe/London" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'Europe/London' ? 'selected' : ''; ?>>London</option>
-                            <option value="Asia/Tokyo" <?php echo ($settings['timezone']['setting_value'] ?? '') == 'Asia/Tokyo' ? 'selected' : ''; ?>>Tokyo</option>
                         </select>
                     </div>
                     
@@ -482,17 +466,6 @@ include_once '../../includes/sidebar.php';
                             <option value="monthly" <?php echo ($settings['backup_frequency']['setting_value'] ?? '') == 'monthly' ? 'selected' : ''; ?>>Monthly</option>
                         </select>
                     </div>
-                    
-                    <div class="form-group">
-                        <button type="button" onclick="createBackup()" class="btn-save">
-                            <i class="fas fa-database"></i> Create Backup Now
-                        </button>
-                    </div>
-                    
-                    <div id="backupList">
-                        <h4>Recent Backups</h4>
-                        <div id="backupFiles"></div>
-                    </div>
                 </div>
                 
                 <!-- Audit Logs Section -->
@@ -525,13 +498,6 @@ include_once '../../includes/sidebar.php';
                     <?php else: ?>
                         <p>No audit logs found.</p>
                     <?php endif; ?>
-                    
-                    <div class="form-group" style="margin-top: 20px;">
-                        <button type="button" onclick="clearAuditLogs()" class="btn-danger" 
-                                onclick="return confirm('Are you sure? This will delete all audit logs.')">
-                            <i class="fas fa-trash"></i> Clear Audit Logs
-                        </button>
-                    </div>
                 </div>
                 
                 <div style="margin-top: 30px; text-align: right;">
@@ -546,99 +512,16 @@ include_once '../../includes/sidebar.php';
 
 <script>
 function showSection(sectionId) {
-    // Hide all sections
     document.querySelectorAll('.settings-section').forEach(section => {
         section.classList.remove('active');
     });
-    
-    // Show selected section
     document.getElementById(sectionId).classList.add('active');
     
-    // Update active nav link
     document.querySelectorAll('.settings-nav a').forEach(link => {
         link.classList.remove('active');
     });
     document.querySelector(`.settings-nav a[href="#${sectionId}"]`).classList.add('active');
 }
-
-function createBackup() {
-    if (confirm('Create a database backup now?')) {
-        fetch('backup.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'action=create_backup'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Backup created successfully!');
-                loadBackupList();
-            } else {
-                alert('Backup failed: ' + data.message);
-            }
-        });
-    }
-}
-
-function loadBackupList() {
-    fetch('backup.php?action=list_backups')
-        .then(response => response.json())
-        .then(data => {
-            const container = document.getElementById('backupFiles');
-            if (data.backups && data.backups.length > 0) {
-                container.innerHTML = data.backups.map(backup => `
-                    <div class="backup-item">
-                        <div>
-                            <strong>${backup.name}</strong><br>
-                            <small>Size: ${backup.size} | Created: ${backup.date}</small>
-                        </div>
-                        <div>
-                            <a href="download_backup.php?file=${backup.name}" class="btn-save" style="padding: 5px 10px;">
-                                <i class="fas fa-download"></i> Download
-                            </a>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                container.innerHTML = '<p>No backups found.</p>';
-            }
-        });
-}
-
-function clearAuditLogs() {
-    if (confirm('Are you sure you want to clear all audit logs? This action cannot be undone.')) {
-        fetch('clear_logs.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'action=clear_audit'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Failed to clear logs.');
-            }
-        });
-    }
-}
-
-// Load backup list on page load
-if (document.getElementById('backupFiles')) {
-    loadBackupList();
-}
-
-// Auto-refresh backup list every 30 seconds if on backup section
-setInterval(() => {
-    const backupSection = document.getElementById('backup');
-    if (backupSection && backupSection.classList.contains('active')) {
-        loadBackupList();
-    }
-}, 30000);
 </script>
 
 <?php

@@ -353,3 +353,69 @@ function showTab(tabId) {
 <?php
 include_once '../../includes/footer.php';
 ?>
+
+<!-- Notification Settings Section -->
+<div class="card" style="margin-top: 20px;">
+    <h3><i class="fas fa-bell"></i> Notification Settings</h3>
+    
+    <div class="form-group">
+        <label class="checkbox-label">
+            <input type="checkbox" id="enableNotifications" onchange="toggleNotifications()">
+            Enable Desktop Notifications
+        </label>
+    </div>
+    
+    <div class="form-group">
+        <label class="checkbox-label">
+            <input type="checkbox" id="enableSound" onchange="toggleSound()">
+            Play Sound for Notifications
+        </label>
+    </div>
+    
+    <div class="form-group">
+        <button onclick="testNotification()" class="btn btn-primary">
+            <i class="fas fa-bell"></i> Test Notification
+        </button>
+    </div>
+</div>
+
+<script>
+function toggleNotifications() {
+    const enabled = document.getElementById('enableNotifications').checked;
+    if (notificationManager) {
+        notificationManager.updatePreferences({ enabled: enabled });
+    }
+    localStorage.setItem('notificationsEnabled', enabled);
+}
+
+function toggleSound() {
+    const enabled = document.getElementById('enableSound').checked;
+    if (notificationManager) {
+        notificationManager.updatePreferences({ sound: enabled });
+    }
+    localStorage.setItem('notificationSound', enabled);
+}
+
+function testNotification() {
+    if (notificationManager && notificationManager.permission) {
+        notificationManager.sendNotification(
+            'Test Notification',
+            'This is a test notification from your Filing Management System!',
+            window.location.href,
+            'test'
+        );
+    } else {
+        alert('Please enable desktop notifications first');
+        Notification.requestPermission();
+    }
+}
+
+// Load saved preferences
+document.addEventListener('DOMContentLoaded', () => {
+    const notificationsEnabled = localStorage.getItem('notificationsEnabled') !== 'false';
+    const soundEnabled = localStorage.getItem('notificationSound') !== 'false';
+    
+    document.getElementById('enableNotifications').checked = notificationsEnabled;
+    document.getElementById('enableSound').checked = soundEnabled;
+});
+</script>

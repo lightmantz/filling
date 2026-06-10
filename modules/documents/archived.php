@@ -1,4 +1,7 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once '../../config/session.php';
 requireLogin();
 require_once '../../includes/functions.php';
@@ -9,9 +12,9 @@ $base_url = '../../';
 $conn = getConnection();
 $user_role = $_SESSION['user_role'];
 
-// Check permission - allow records_officer AND super_admin
+// Check permission - only records officer and super admin can archive
 if ($user_role !== 'records_officer' && $user_role !== 'super_admin') {
-    header('Location: ' . BASE_URL . '/modules/folders/index.php');
+    header('Location: index.php');
     exit();
 }
 
@@ -69,7 +72,7 @@ if (isset($_GET['restore']) && isset($_GET['id'])) {
     exit();
 }
 
-// Get archived folders
+// Get archived folders - REMOVED updated_at reference
 $archived_query = "SELECT f.*, c.name as category_name, 
                    COUNT(DISTINCT d.id) as document_count,
                    MAX(d.created_at) as last_activity
@@ -81,7 +84,7 @@ $archived_query = "SELECT f.*, c.name as category_name,
                    ORDER BY f.created_at DESC";
 $archived_folders = $conn->query($archived_query);
 
-// Get active folders for archiving
+// Get active folders for archiving - REMOVED updated_at reference
 $active_query = "SELECT f.*, c.name as category_name, 
                  COUNT(DISTINCT d.id) as document_count,
                  MAX(d.created_at) as last_activity
@@ -364,13 +367,11 @@ include_once '../../includes/sidebar.php';
                                 <a href="view.php?id=<?php echo $folder['id']; ?>" class="btn btn-view btn-small" title="View Folder">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                <?php if ($user_role === 'records_officer' || $user_role === 'super_admin'): ?>
-                                    <a href="?archive=1&id=<?php echo $folder['id']; ?>" class="btn btn-archive btn-small" 
-                                       onclick="return confirm('Archive this folder? All documents will remain accessible but the folder will be moved to archives.')" 
-                                       title="Archive Folder">
-                                        <i class="fas fa-archive"></i> Archive
-                                    </a>
-                                <?php endif; ?>
+                                <a href="?archive=1&id=<?php echo $folder['id']; ?>" class="btn btn-archive btn-small" 
+                                   onclick="return confirm('Archive this folder? All documents will remain accessible but the folder will be moved to archives.')" 
+                                   title="Archive Folder">
+                                    <i class="fas fa-archive"></i> Archive
+                                </a>
                             </div>
                         </div>
                     <?php endwhile; ?>
@@ -378,9 +379,7 @@ include_once '../../includes/sidebar.php';
                     <div class="empty-state">
                         <i class="fas fa-check-circle" style="color: #27ae60;"></i>
                         <p>No active folders to archive.</p>
-                        <?php if ($user_role === 'records_officer' || $user_role === 'super_admin'): ?>
-                            <a href="create.php" class="btn btn-view btn-small">Create New Folder</a>
-                        <?php endif; ?>
+                        <a href="create.php" class="btn btn-view btn-small">Create New Folder</a>
                     </div>
                 <?php endif; ?>
             </div>
@@ -431,19 +430,17 @@ include_once '../../includes/sidebar.php';
                                 <a href="view.php?id=<?php echo $folder['id']; ?>" class="btn btn-view btn-small" title="View Folder">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                <?php if ($user_role === 'records_officer' || $user_role === 'super_admin'): ?>
-                                    <a href="?restore=1&id=<?php echo $folder['id']; ?>" class="btn btn-restore btn-small" 
-                                       onclick="return confirm('Restore this folder? It will become active again.')" 
-                                       title="Restore Folder">
-                                        <i class="fas fa-undo"></i> Restore
+                                <a href="?restore=1&id=<?php echo $folder['id']; ?>" class="btn btn-restore btn-small" 
+                                   onclick="return confirm('Restore this folder? It will become active again.')" 
+                                   title="Restore Folder">
+                                    <i class="fas fa-undo"></i> Restore
+                                </a>
+                                <?php if ($folder['document_count'] == 0): ?>
+                                    <a href="index.php?delete=<?php echo $folder['id']; ?>" class="btn btn-danger btn-small" 
+                                       onclick="return confirm('Permanently delete this folder? This action cannot be undone.')" 
+                                       title="Delete Permanently">
+                                        <i class="fas fa-trash"></i> Delete
                                     </a>
-                                    <?php if ($folder['document_count'] == 0): ?>
-                                        <a href="index.php?delete=<?php echo $folder['id']; ?>" class="btn btn-danger btn-small" 
-                                           onclick="return confirm('Permanently delete this folder? This action cannot be undone.')" 
-                                           title="Delete Permanently">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </a>
-                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                         </div>

@@ -31,21 +31,127 @@ if (!$document) {
     die("Document not found");
 }
 
-// Check access permissions
+// Check access permissions - INCLUDING SUPER ADMIN
 $can_view = false;
 $user_role = $_SESSION['user_role'];
 $user_id = $_SESSION['user_id'];
 
-if ($user_role === 'records_officer') {
+// Super admin can view ALL documents
+if ($user_role === 'super_admin') {
+    $can_view = true;
+}
+// Records officer can view documents not submitted to admin
+elseif ($user_role === 'records_officer') {
     $can_view = !in_array($document['status'], ['submitted_to_admin', 'in_review']);
-} elseif ($user_role === 'admin') {
+} 
+// Admin can view documents assigned to them
+elseif ($user_role === 'admin') {
     $can_view = ($document['current_holder'] == $user_id || $document['status'] == 'submitted_to_admin');
-} else {
+} 
+// Normal user can only view their own documents
+elseif ($user_role === 'user') {
     $can_view = ($document['submitted_by'] == $user_id);
 }
 
 if (!$can_view) {
-    die("You don't have permission to view this document");
+    // Show error message with more details
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Access Denied</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                margin: 0;
+            }
+            .error-container {
+                background: white;
+                padding: 40px;
+                border-radius: 10px;
+                text-align: center;
+                max-width: 500px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            }
+            .error-icon {
+                font-size: 64px;
+                color: #e74c3c;
+                margin-bottom: 20px;
+            }
+            h1 {
+                color: #333;
+                margin-bottom: 10px;
+            }
+            p {
+                color: #666;
+                margin-bottom: 20px;
+            }
+            .btn {
+                display: inline-block;
+                padding: 10px 20px;
+                background: #3498db;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+            }
+            .btn:hover {
+                background: #2980b9;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="error-container">
+            <div class="error-icon">
+                <i class="fas fa-lock"></i>
+            </div>
+            <h1>Access Denied</h1>
+            <p>You don't have permission to view this document.</p>
+            <p><strong>Document:</strong> <?php echo htmlspecialchars($document['title']); ?><br>
+            <strong>Your Role:</strong> <?php echo ucfirst(str_replace('_', ' ', $user_role)); ?><br>
+            <strong>Document Status:</strong> <?php echo $document['status']; ?></p>
+            <a href="<?php echo BASE_URL; ?>/modules/users/<?php echo $user_role; ?>_dashboard.php" class="btn">Back to Dashboard</a>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+        <script>
+// Debug script to test if mentions are working
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('View page loaded');
+    
+    // Test if textarea exists
+    const textarea = document.getElementById('commentInput');
+    if (textarea) {
+        console.log('Comment textarea found');
+        
+        // Add a test event listener
+        textarea.addEventListener('keydown', function(e) {
+            if (e.key === '@') {
+                console.log('@ key pressed!');
+            }
+        });
+    } else {
+        console.log('Comment textarea NOT found');
+    }
+    
+    // Test API endpoint
+    fetch('../../modules/notifications/get_users.php')
+        .then(response => response.json())
+        .then(data => {
+            console.log('API Test Response:', data);
+        })
+        .catch(error => {
+            console.error('API Test Error:', error);
+        });
+});
+</script>
+    </body>
+    </html>
+    <?php
+    exit();
 }
 
 // Handle confidential document password
@@ -71,8 +177,8 @@ if ($document['is_confidential'] || $document['folder_confidential']) {
     }
 }
 
-// Get comments with user details - REMOVED avatar column
-$comments_query = "SELECT c.*, u.full_name, u.role 
+// Get comments with user details
+$comments_query = "SELECT c.*, u.full_name, u.role, u.username
                    FROM comments c
                    JOIN users u ON c.user_id = u.id
                    WHERE c.document_id = ?
@@ -96,21 +202,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['comment'])) {
 if (isset($_POST['action'])) {
     $action = $_POST['action'];
     
-    if ($action === 'approve' && $user_role === 'admin') {
+    if ($action === 'approve' && ($user_role === 'admin' || $user_role === 'super_admin')) {
         updateDocumentStatus($document_id, 'approved', $user_id);
         trackWorkflow($document_id, $user_id, null, 'approve', $_POST['notes'] ?? 'Document approved');
         header("Location: view.php?id=$document_id");
         exit();
     }
     
-    if ($action === 'reject' && $user_role === 'admin') {
+    if ($action === 'reject' && ($user_role === 'admin' || $user_role === 'super_admin')) {
         updateDocumentStatus($document_id, 'rejected', $user_id);
         trackWorkflow($document_id, $user_id, null, 'reject', $_POST['notes'] ?? 'Document rejected');
         header("Location: view.php?id=$document_id");
         exit();
     }
     
-    if ($action === 'assign' && $user_role === 'admin') {
+    if ($action === 'assign' && ($user_role === 'admin' || $user_role === 'super_admin')) {
         $assigned_to = $_POST['assigned_to'];
         $query = "UPDATE documents SET current_holder = ?, status = 'in_review' WHERE id = ?";
         $stmt = $conn->prepare($query);
@@ -121,7 +227,7 @@ if (isset($_POST['action'])) {
         exit();
     }
     
-    if ($action === 'return_to_records' && $user_role === 'admin') {
+    if ($action === 'return_to_records' && ($user_role === 'admin' || $user_role === 'super_admin')) {
         $query = "UPDATE documents SET current_holder = NULL, status = 'returned' WHERE id = ?";
         $stmt = $conn->prepare($query);
         $stmt->bind_param("i", $document_id);
@@ -131,14 +237,14 @@ if (isset($_POST['action'])) {
         exit();
     }
     
-    if ($action === 'close' && $user_role === 'admin') {
+    if ($action === 'close' && ($user_role === 'admin' || $user_role === 'super_admin')) {
         updateDocumentStatus($document_id, 'closed', $user_id);
         trackWorkflow($document_id, $user_id, null, 'close', 'Document closed');
         header("Location: view.php?id=$document_id");
         exit();
     }
     
-    if ($action === 'reopen' && $user_role === 'records_officer') {
+    if ($action === 'reopen' && ($user_role === 'records_officer' || $user_role === 'super_admin')) {
         updateDocumentStatus($document_id, 'submitted', $user_id);
         trackWorkflow($document_id, $user_id, null, 'reopen', 'Document reopened');
         header("Location: view.php?id=$document_id");
@@ -393,12 +499,30 @@ include_once '../../includes/sidebar.php';
         border-top-left-radius: 4px;
     }
     
+    /* Mention Highlighting */
+    .comment-text .mention {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .comment-text .mention:hover {
+        background: #bbdef5;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+    
     /* Comment Form */
     .comment-form-container {
         padding: 20px 25px;
         border-top: 1px solid #eee;
         background: white;
         border-radius: 0 0 12px 12px;
+        position: relative;
     }
     
     .comment-input-wrapper {
@@ -414,6 +538,7 @@ include_once '../../includes/sidebar.php';
         font-size: 14px;
         resize: vertical;
         transition: all 0.3s;
+        line-height: 1.5;
     }
     
     .comment-input-wrapper textarea:focus {
@@ -443,6 +568,73 @@ include_once '../../includes/sidebar.php';
     .btn-post:hover {
         transform: translateY(-2px);
         box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    /* Mentions Dropdown Styles */
+    .mentions-dropdown {
+        position: absolute;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        min-width: 220px;
+        display: none;
+    }
+    
+    .mention-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.2s;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .mention-item:last-child {
+        border-bottom: none;
+    }
+    
+    .mention-item:hover,
+    .mention-item.selected {
+        background: #f0f7ff;
+    }
+    
+    .mention-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 12px;
+        flex-shrink: 0;
+    }
+    
+    .mention-info {
+        flex: 1;
+    }
+    
+    .mention-name {
+        font-weight: 500;
+        font-size: 13px;
+        color: #333;
+    }
+    
+    .mention-role {
+        font-size: 10px;
+        color: #666;
+    }
+    
+    .mention-username {
+        font-size: 10px;
+        color: #999;
     }
     
     /* Action Buttons */
@@ -738,7 +930,7 @@ include_once '../../includes/sidebar.php';
                     
                     <!-- Action Buttons -->
                     <div class="action-buttons">
-                        <?php if ($user_role === 'admin' && $document['status'] !== 'closed'): ?>
+                        <?php if (($user_role === 'admin' || $user_role === 'super_admin') && $document['status'] !== 'closed'): ?>
                             <button onclick="showAssignModal()" class="btn btn-primary">
                                 <i class="fas fa-user-plus"></i> Assign to User
                             </button>
@@ -753,7 +945,7 @@ include_once '../../includes/sidebar.php';
                             </button>
                         <?php endif; ?>
                         
-                        <?php if ($user_role === 'records_officer' && $document['status'] === 'closed'): ?>
+                        <?php if (($user_role === 'records_officer' || $user_role === 'super_admin') && $document['status'] === 'closed'): ?>
                             <button onclick="reopenDocument()" class="btn btn-success">
                                 <i class="fas fa-folder-open"></i> Reopen Document
                             </button>
@@ -795,7 +987,7 @@ include_once '../../includes/sidebar.php';
                                         </span>
                                     </div>
                                     <div class="comment-text">
-                                        <?php echo nl2br(htmlspecialchars($comment['comment_text'])); ?>
+                                        <?php echo highlightMentions(nl2br(htmlspecialchars($comment['comment_text']))); ?>
                                     </div>
                                 </div>
                             </div>
@@ -804,16 +996,16 @@ include_once '../../includes/sidebar.php';
                         <div class="empty-comments">
                             <i class="fas fa-comment-dots"></i>
                             <p>No comments yet</p>
-                            <p style="font-size: 12px;">Be the first to add a comment</p>
+                            <p style="font-size: 12px;">Be the first to add a comment. Type <strong>@</strong> to mention someone!</p>
                         </div>
                     <?php endif; ?>
                 </div>
                 
-                <?php if ($document['status'] !== 'closed' && ($user_role !== 'user' || $document['status'] !== 'closed')): ?>
+                <?php if ($document['status'] !== 'closed'): ?>
                     <div class="comment-form-container">
                         <form method="POST" id="commentForm">
                             <div class="comment-input-wrapper">
-                                <textarea name="comment" id="commentInput" rows="3" placeholder="Write your comment here..."></textarea>
+                                <textarea name="comment" id="commentInput" rows="3" placeholder="Write your comment here... Type @ to mention a user"></textarea>
                             </div>
                             <div class="comment-actions">
                                 <button type="submit" class="btn-post" id="postCommentBtn">
@@ -843,12 +1035,12 @@ include_once '../../includes/sidebar.php';
                     <select name="assigned_to" class="form-control" required>
                         <option value="">Select User</option>
                         <?php
-                        $users_query = "SELECT id, full_name, role FROM users WHERE role IN ('admin', 'user') AND is_active = 1";
+                        $users_query = "SELECT id, full_name, role FROM users WHERE role IN ('admin', 'records_officer', 'user') AND is_active = 1 ORDER BY full_name";
                         $users_result = $conn->query($users_query);
                         while ($user = $users_result->fetch_assoc()):
                         ?>
                             <option value="<?php echo $user['id']; ?>">
-                                <?php echo htmlspecialchars($user['full_name']); ?> (<?php echo ucfirst($user['role']); ?>)
+                                <?php echo htmlspecialchars($user['full_name']); ?> (<?php echo ucfirst(str_replace('_', ' ', $user['role'])); ?>)
                             </option>
                         <?php endwhile; ?>
                     </select>
@@ -970,7 +1162,20 @@ document.getElementById('commentInput')?.addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = (this.scrollHeight) + 'px';
 });
+
+// Initialize mention manager
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('commentInput')) {
+        new MentionManager('commentInput', {
+            trigger: '@',
+            minChars: 1
+        });
+    }
+});
 </script>
+
+<!-- User Mentions Script -->
+<script src="<?php echo $base_url; ?>/assets/js/mentions.js"></script>
 
 <?php
 include_once '../../includes/footer.php';

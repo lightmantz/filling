@@ -27,23 +27,15 @@ if (!function_exists('buildUrl')) {
 
 /**
  * Generate unique document number in format: PF/folio_number/day/month/year
- * Example: PF/1/15/05/2026
  */
 function generateDocumentNumber($folder_id) {
     $conn = getConnection();
-    
-    // Get the next folio number for this folder
     $folio_number = generateFolioNumber($folder_id);
-    
-    // Get current date components
     $day = date('d');
     $month = date('m');
     $year = date('Y');
-    
-    // Format: PF/folio_number/day/month/year
     $document_number = sprintf("PF/%d/%s/%s/%s", $folio_number, $day, $month, $year);
     
-    // Check if this document number already exists (unlikely but possible)
     $check_query = "SELECT id FROM documents WHERE document_number = ?";
     $check_stmt = $conn->prepare($check_query);
     $check_stmt->bind_param("s", $document_number);
@@ -51,7 +43,6 @@ function generateDocumentNumber($folder_id) {
     $check_result = $check_stmt->get_result();
     
     if ($check_result->num_rows > 0) {
-        // Add a random suffix if duplicate (very rare)
         $document_number .= "-" . rand(100, 999);
     }
     
@@ -59,30 +50,7 @@ function generateDocumentNumber($folder_id) {
 }
 
 /**
- * Alternative: Generate document number with sequential numbering across all documents
- * Format: PF/sequential_number/day/month/year
- */
-function generateDocumentNumberSequential() {
-    $conn = getConnection();
-    
-    // Get the next sequential number
-    $query = "SELECT COUNT(*) as count FROM documents";
-    $result = $conn->query($query);
-    $count = $result->fetch_assoc()['count'] + 1;
-    
-    // Get current date components
-    $day = date('d');
-    $month = date('m');
-    $year = date('Y');
-    
-    // Format: PF/sequential_number/day/month/year
-    return sprintf("PF/%d/%s/%s/%s", $count, $day, $month, $year);
-}
-
-/**
  * Generate document number with custom prefix
- * @param string $prefix - Custom prefix (default: PF)
- * @param int $folder_id - Folder ID for folio numbering
  */
 function generateDocumentNumberWithPrefix($prefix = 'PF', $folder_id = null) {
     $conn = getConnection();
@@ -90,18 +58,15 @@ function generateDocumentNumberWithPrefix($prefix = 'PF', $folder_id = null) {
     if ($folder_id) {
         $folio_number = generateFolioNumber($folder_id);
     } else {
-        // Get sequential number across all documents
         $query = "SELECT COUNT(*) as count FROM documents";
         $result = $conn->query($query);
         $folio_number = $result->fetch_assoc()['count'] + 1;
     }
     
-    // Get current date components
     $day = date('d');
     $month = date('m');
     $year = date('Y');
     
-    // Format: PREFIX/folio_number/day/month/year
     return sprintf("%s/%d/%s/%s/%s", strtoupper($prefix), $folio_number, $day, $month, $year);
 }
 
@@ -144,7 +109,7 @@ function getFolderDocuments($folder_id, $order = 'DESC') {
 }
 
 /**
- * Add comment to document
+ * Add comment to document and notify mentioned users
  */
 function addComment($document_id, $user_id, $comment) {
     $conn = getConnection();
@@ -153,11 +118,65 @@ function addComment($document_id, $user_id, $comment) {
     $stmt->bind_param("iis", $document_id, $user_id, $comment);
     
     if ($stmt->execute()) {
-        // Log the action
         auditLog($user_id, 'added_comment', "Added comment to document ID: $document_id");
+        
+        // Extract mentioned users from comment (mentions @username)
+        preg_match_all('/@([A-Za-z0-9_]+)/', $comment, $matches);
+        $mentioned_usernames = $matches[1];
+        
+        if (!empty($mentioned_usernames)) {
+            $placeholders = implode(',', array_fill(0, count($mentioned_usernames), '?'));
+            $types = str_repeat('s', count($mentioned_usernames));
+            
+            $user_query = "SELECT id, full_name, email FROM users WHERE username IN ($placeholders)";
+            $user_stmt = $conn->prepare($user_query);
+            $user_stmt->bind_param($types, ...$mentioned_usernames);
+            $user_stmt->execute();
+            $mentioned_users = $user_stmt->get_result();
+            
+            $doc_query = "SELECT title FROM documents WHERE id = ?";
+            $doc_stmt = $conn->prepare($doc_query);
+            $doc_stmt->bind_param("i", $document_id);
+            $doc_stmt->execute();
+            $document = $doc_stmt->get_result()->fetch_assoc();
+            
+            $commenter_query = "SELECT full_name FROM users WHERE id = ?";
+            $commenter_stmt = $conn->prepare($commenter_query);
+            $commenter_stmt->bind_param("i", $user_id);
+            $commenter_stmt->execute();
+            $commenter = $commenter_stmt->get_result()->fetch_assoc();
+            
+            // Create notifications for mentioned users
+            while ($mentioned = $mentioned_users->fetch_assoc()) {
+                $notification_title = "You were mentioned in a comment";
+                $notification_message = $commenter['full_name'] . " mentioned you in a comment on document: " . $document['title'];
+                $notification_link = "../../modules/documents/view.php?id=$document_id";
+                
+                $notif_query = "INSERT INTO notifications (user_id, title, message, link, type, is_read, created_at) 
+                                VALUES (?, ?, ?, ?, 'mention', 0, NOW())";
+                $notif_stmt = $conn->prepare($notif_query);
+                $notif_stmt->bind_param("isss", $mentioned['id'], $notification_title, $notification_message, $notification_link);
+                $notif_stmt->execute();
+            }
+        }
+        
         return true;
     }
     return false;
+}
+
+/**
+ * Highlight mentioned users in text
+ */
+function highlightMentions($text) {
+    $pattern = '/@([A-Za-z0-9_]+)/';
+    
+    $callback = function($matches) {
+        $username = $matches[1];
+        return '<span class="mention" data-username="' . htmlspecialchars($username) . '">@' . htmlspecialchars($username) . '</span>';
+    };
+    
+    return preg_replace_callback($pattern, $callback, $text);
 }
 
 /**
@@ -406,13 +425,11 @@ function formatDocumentNumber($document_number) {
     if (empty($document_number)) {
         return 'N/A';
     }
-    // You can add additional formatting here if needed
     return htmlspecialchars($document_number);
 }
 
 /**
  * Parse document number to extract components
- * Returns array with prefix, folio, day, month, year
  */
 function parseDocumentNumber($document_number) {
     $parts = explode('/', $document_number);
@@ -468,7 +485,6 @@ function createDatabaseBackup() {
     exec($command, $output, $return_var);
     
     if ($return_var === 0 && file_exists($backup_file)) {
-        // Log backup
         $conn = getConnection();
         $query = "INSERT INTO backup_logs (backup_type, file_name, file_size, status) 
                   VALUES ('auto', ?, ?, 'success')";
@@ -478,7 +494,6 @@ function createDatabaseBackup() {
         $stmt->bind_param("si", $file_name, $file_size);
         $stmt->execute();
         
-        // Delete old backups (keep last 10)
         $backups = glob($backup_dir . 'backup_*.sql');
         if (count($backups) > 10) {
             usort($backups, function($a, $b) {
@@ -559,7 +574,6 @@ function getDocumentStatistics($user_id, $role) {
  * Validate document number format
  */
 function isValidDocumentNumber($document_number) {
-    // Check format: PF/123/15/05/2026
     $pattern = '/^[A-Z]{2,3}\/\d+\/\d{2}\/\d{2}\/\d{4}$/';
     return preg_match($pattern, $document_number);
 }

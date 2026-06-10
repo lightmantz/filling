@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../../config/database.php';
+require_once '../../includes/functions.php';
 
 $error = '';
 
@@ -8,6 +9,9 @@ $error = '';
 if (isset($_SESSION['user_id'])) {
     $role = $_SESSION['user_role'];
     switch ($role) {
+        case 'super_admin':
+            header('Location: ' . BASE_URL . '/modules/users/super_admin_dashboard.php');
+            break;
         case 'records_officer':
             header('Location: ' . BASE_URL . '/modules/users/records_dashboard.php');
             break;
@@ -17,6 +21,8 @@ if (isset($_SESSION['user_id'])) {
         case 'user':
             header('Location: ' . BASE_URL . '/modules/users/user_dashboard.php');
             break;
+        default:
+            header('Location: ' . BASE_URL . '/modules/auth/login.php');
     }
     exit();
 }
@@ -26,27 +32,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     
     $conn = getConnection();
-    $query = "SELECT id, username, full_name, role, password FROM users WHERE username = ? AND is_active = 1";
+    
+    // Get user with department information
+    $query = "SELECT u.id, u.username, u.full_name, u.role, u.password, u.is_active, 
+                     u.department_id, d.name as department_name, d.dept_code
+              FROM users u
+              LEFT JOIN departments d ON u.department_id = d.id
+              WHERE u.username = ? AND u.is_active = 1";
     $stmt = $conn->prepare($query);
     $stmt->bind_param("s", $username);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($user = $result->fetch_assoc()) {
-        // For demo purposes, using plain password comparison
+        // Verify password (supports both plain text for demo and hashed passwords)
         if ($password === 'password123' || password_verify($password, $user['password'])) {
+            // Set all session variables using the setUserSession function
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['full_name'] = $user['full_name'];
             $_SESSION['user_role'] = $user['role'];
+            $_SESSION['department_id'] = $user['department_id'];
+            $_SESSION['department_name'] = $user['department_name'];
+            $_SESSION['dept_code'] = $user['dept_code'];
+            $_SESSION['is_active'] = $user['is_active'];
+            $_SESSION['last_activity'] = time();
+            
+            // Update last login timestamp
+            $update_query = "UPDATE users SET last_login = NOW() WHERE id = ?";
+            $update_stmt = $conn->prepare($update_query);
+            $update_stmt->bind_param("i", $user['id']);
+            $update_stmt->execute();
+            
+            // Log the login action
+            auditLog($user['id'], 'user_login', "User logged in successfully from IP: " . $_SERVER['REMOTE_ADDR']);
             
             // Redirect based on role
             switch ($user['role']) {
+                case 'super_admin':
+                    header('Location: ' . BASE_URL . '/modules/users/super_admin_dashboard.php');
+                    break;
                 case 'records_officer':
                     header('Location: ' . BASE_URL . '/modules/users/records_dashboard.php');
                     break;
                 case 'admin':
                     header('Location: ' . BASE_URL . '/modules/users/admin_dashboard.php');
+                    break;
+                case 'user':
+                    header('Location: ' . BASE_URL . '/modules/users/user_dashboard.php');
                     break;
                 default:
                     header('Location: ' . BASE_URL . '/modules/users/user_dashboard.php');
@@ -54,9 +87,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         } else {
             $error = 'Invalid username or password';
+            // Log failed login attempt
+            error_log("Failed login attempt for username: $username from IP: " . $_SERVER['REMOTE_ADDR']);
         }
     } else {
         $error = 'Invalid username or password';
+        // Log failed login attempt
+        error_log("Failed login attempt for username: $username from IP: " . $_SERVER['REMOTE_ADDR']);
     }
 }
 ?>
@@ -108,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 10px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
             width: 100%;
-            max-width: 450px;
+            max-width: 470px;
             animation: fadeInUp 0.6s ease-out;
         }
         
@@ -133,10 +170,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* === PLACE YOUR LOGO HERE === */
         /* =========================================== */
         .logo {
-            width: 100px;
-            height: 100px;
+            width: 150px;
+            height: 150px;
             margin: 0 auto 15px;
-            /* Remove the gradient background if using an image logo */
             background: transparent;
             border-radius: 50%;
             display: flex;
@@ -144,17 +180,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             justify-content: center;
         }
         
-        /* For image logo - UNCOMMENT THIS AND COMMENT THE ICON BELOW */
-        /*
+        /* For image logo */
         .logo img {
             width: 100%;
             height: 100%;
             object-fit: contain;
         }
-        */
         
-        /* For text/icon logo (remove this if using image) */
-        .logo i {
+        /* For text/icon logo (fallback) */
+        .logo i.fallback {
             font-size: 60px;
             color: #667eea;
             background: white;
@@ -194,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 8px;
             color: #555;
             font-weight: 500;
-            font-size: 16px;
+            font-size: 14px;
         }
         
         .form-group input {
@@ -290,7 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .footer-links {
             margin-top: 20px;
             text-align: center;
-            font-size: 17px;
+            font-size: 18px;
         }
         
         .footer-links a {
@@ -315,7 +349,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 height: 80px;
             }
             
-            .logo i {
+            .logo i.fallback {
                 font-size: 40px;
             }
             
@@ -333,14 +367,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="logo-container">
             <div class="logo">
                 <!-- OPTION 1: For Image Logo (PNG, JPG, SVG) -->
-                <!-- Replace 'your-logo.png' with your actual logo file name -->
-                <img src="../../assets/images/logo.png" alt="Company Logo" style="width: 100%; height: 100%; object-fit: contain;">
-                
-                <!-- OPTION 2: For Font Awesome Icon (Comment out the img tag above and uncomment below) -->
-                <!-- <i class="fas fa-folder-open"></i> -->
-                
-                <!-- OPTION 3: For Text Logo -->
-                <!-- <span style="font-size: 24px; font-weight: bold; color: #667eea;">FMS</span> -->
+                <!-- Place your logo file at: ../../assets/images/logo.png -->
+                <img src="../../assets/images/logo.png" alt="Company Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <i class="fas fa-folder-open fallback" style="display: none;"></i>
             </div>
             <div class="system-name">Filing Management System</div>
             <div class="system-tagline">Secure Document Management</div>
@@ -360,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <label>Username</label>
                 <div class="input-icon">
                     <i class="fas fa-user"></i>
-                    <input type="text" name="username" placeholder="Enter your username" required>
+                    <input type="text" name="username" placeholder="Enter your username" required autofocus>
                 </div>
             </div>
             <div class="form-group">
@@ -377,6 +406,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         <div class="demo-info">
             <h4><i class="fas fa-info-circle"></i> Demo Credentials</h4>
+            <p><strong>Super Admin:</strong> superadmin / password123</p>
             <p><strong>Records Officer:</strong> records_officer / password123</p>
             <p><strong>Admin:</strong> admin_user / password123</p>
             <p><strong>Normal User:</strong> normal_user / password123</p>
@@ -391,5 +421,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script>
+        // Handle logo fallback
+        document.addEventListener('DOMContentLoaded', function() {
+            const logoImg = document.querySelector('.logo img');
+            if (logoImg && logoImg.naturalWidth === 0) {
+                logoImg.style.display = 'none';
+                const fallback = document.querySelector('.logo .fallback');
+                if (fallback) fallback.style.display = 'flex';
+            }
+        });
+    </script>
 </body>
 </html>

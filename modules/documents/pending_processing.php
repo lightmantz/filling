@@ -1,13 +1,19 @@
 <?php
 require_once '../../config/session.php';
 requireLogin();
-requireRole('records_officer');
 require_once '../../includes/functions.php';
 
 $page_title = 'Pending Processing';
 $base_url = '../../';
 
 $conn = getConnection();
+$user_role = $_SESSION['user_role'];
+
+// Allow records_officer AND super_admin
+if ($user_role !== 'records_officer' && $user_role !== 'super_admin') {
+    header('Location: ' . BASE_URL . '/modules/users/' . $user_role . '_dashboard.php');
+    exit();
+}
 
 // Get documents that need processing (submitted but not yet sent to admin)
 $query = "SELECT d.*, f.name as folder_name, u.full_name as submitted_by_name
@@ -31,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_to_admin'])) {
         trackWorkflow($document_id, $_SESSION['user_id'], $admin_id, 'submit_to_admin', 
                      'Document submitted for review and decision');
         $success = "Document submitted to administrator successfully!";
-        // Refresh the page to show updated list
         header("Location: pending_processing.php?success=1");
         exit();
     } else {
@@ -113,6 +118,22 @@ include_once '../../includes/sidebar.php';
     
     .btn-submit:hover {
         background: #229954;
+    }
+    
+    .btn {
+        display: inline-block;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.3s;
+    }
+    
+    .btn-secondary {
+        background: #95a5a6;
+        color: white;
     }
     
     .empty-state {

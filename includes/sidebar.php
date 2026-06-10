@@ -10,226 +10,358 @@ if (!isset($base_url)) {
 }
 $base_url = rtrim($base_url, '/');
 
-// Functions cleanUrl() and buildUrl() are now in functions.php
+// Helper function to clean URLs (remove multiple slashes)
+if (!function_exists('cleanUrl')) {
+    function cleanUrl($url) {
+        return preg_replace('#/+#', '/', $url);
+    }
+}
+
+// Helper function to build URL
+if (!function_exists('buildUrl')) {
+    function buildUrl($path) {
+        global $base_url;
+        $path = ltrim($path, '/');
+        return cleanUrl($base_url . '/' . $path);
+    }
+}
 
 // Define menu items based on role
 $menus = [];
 
-// Common menus for all users
-$common_menus = [
-    'dashboard' => [
-        'title' => 'Dashboard',
-        'icon' => 'fas fa-tachometer-alt',
-        'url' => buildUrl('modules/users/' . $user_role . '_dashboard.php'),
-        'roles' => ['super_admin', 'records_officer', 'admin', 'user']
-    ],
-    'folders' => [
-        'title' => 'Folders',
-        'icon' => 'fas fa-folder',
-        'url' => '#',
-        'roles' => ['super_admin', 'records_officer', 'admin', 'user'],
-        'submenus' => [
-            ['title' => 'All Folders', 'url' => buildUrl('modules/folders/index.php')],
-            ['title' => 'Browse Folders', 'url' => buildUrl('modules/folders/browse.php')]
-        ]
-    ]
-];
-
-// Super Admin specific menus (Full system access)
-$super_admin_menus = [
-    'user_management' => [
-        'title' => '👥 User Management',
-        'icon' => 'fas fa-users-cog',
-        'url' => '#',
-        'roles' => ['super_admin'],
-        'submenus' => [
-            ['title' => 'Add New User', 'url' => buildUrl('modules/users/add_user.php')],
-            ['title' => 'Manage Users', 'url' => buildUrl('modules/users/add_user.php')],
-            ['title' => 'User Roles', 'url' => buildUrl('modules/users/roles.php')],
-            ['title' => 'Activity Logs', 'url' => buildUrl('modules/users/activity_log.php')]
-        ]
-    ],
-    'system_overview' => [
-        'title' => 'System Overview',
-        'icon' => 'fas fa-chart-pie',
-        'url' => buildUrl('modules/reports/system_overview.php'),
-        'roles' => ['super_admin']
-    ],
-    'database_backup' => [
-        'title' => 'Database Backup',
-        'icon' => 'fas fa-database',
-        'url' => buildUrl('modules/settings/backup.php'),
-        'roles' => ['super_admin']
-    ]
-];
-
-// Records Officer specific menus
-$records_officer_menus = [
-    'documents' => [
-        'title' => 'Documents',
-        'icon' => 'fas fa-file-alt',
-        'url' => '#',
-        'roles' => ['super_admin', 'records_officer'],
-        'submenus' => [
-            ['title' => 'All Documents', 'url' => buildUrl('modules/documents/all_documents.php')],
-            ['title' => 'Submit Document', 'url' => buildUrl('modules/documents/create.php')],
-            ['title' => 'Pending Processing', 'url' => buildUrl('modules/documents/pending_processing.php')],
-            ['title' => 'Archived Documents', 'url' => buildUrl('modules/documents/archived.php')]
-        ]
-    ],
-    'folder_management' => [
-        'title' => 'Folder Management',
-        'icon' => 'fas fa-folder-open',
-        'url' => '#',
-        'roles' => ['super_admin', 'records_officer'],
-        'submenus' => [
-            ['title' => 'Create Folder', 'url' => buildUrl('modules/folders/create.php')],
-            ['title' => 'Manage Categories', 'url' => buildUrl('modules/categories/index.php')],
-            ['title' => 'Archive Folders', 'url' => buildUrl('modules/folders/archive.php')]
-        ]
-    ],
-    'file_index' => [
-        'title' => 'File Index',
-        'icon' => 'fas fa-index',
-        'url' => '#',
-        'roles' => ['super_admin', 'records_officer'],
-        'submenus' => [
-            ['title' => 'View Index', 'url' => buildUrl('modules/index/index.php')],
-            ['title' => 'Export Index', 'url' => buildUrl('modules/index/export.php')],
-            ['title' => 'Generate Reports', 'url' => buildUrl('modules/index/reports.php')]
-        ]
-    ],
-    'confidential' => [
-        'title' => 'Confidential Docs',
-        'icon' => 'fas fa-lock',
-        'url' => buildUrl('modules/documents/confidential.php'),
-        'roles' => ['super_admin', 'records_officer']
-    ]
-];
-
-// Admin specific menus
-$admin_menus = [
-    'reviews' => [
-        'title' => 'Reviews',
-        'icon' => 'fas fa-clipboard-list',
-        'url' => '#',
-        'roles' => ['super_admin', 'admin'],
-        'submenus' => [
-            ['title' => 'Pending Reviews', 'url' => buildUrl('modules/documents/pending.php')],
-            ['title' => 'Assigned to Me', 'url' => buildUrl('modules/documents/assigned_to_me.php')],
-            ['title' => 'Completed Reviews', 'url' => buildUrl('modules/documents/completed.php')]
-        ]
-    ],
-    'approvals' => [
-        'title' => 'Approvals',
-        'icon' => 'fas fa-check-circle',
-        'url' => '#',
-        'roles' => ['super_admin', 'admin'],
-        'submenus' => [
-            ['title' => 'Pending Approval', 'url' => buildUrl('modules/approvals/pending.php')],
-            ['title' => 'Approval History', 'url' => buildUrl('modules/approvals/history.php')]
-        ]
-    ],
-    'task_management' => [
-        'title' => 'Task Management',
-        'icon' => 'fas fa-tasks',
-        'url' => '#',
-        'roles' => ['super_admin', 'admin'],
-        'submenus' => [
-            ['title' => 'Assign Tasks', 'url' => buildUrl('modules/tasks/assign.php')],
-            ['title' => 'My Tasks', 'url' => buildUrl('modules/tasks/my_tasks.php')],
-            ['title' => 'Task Overview', 'url' => buildUrl('modules/tasks/overview.php')]
-        ]
-    ],
-    'settings' => [
-        'title' => 'System Settings',
-        'icon' => 'fas fa-cogs',
-        'url' => '#',
-        'roles' => ['super_admin', 'admin'],
-        'submenus' => [
-            ['title' => 'General Settings', 'url' => buildUrl('modules/settings/index.php#general')],
-            ['title' => 'Security', 'url' => buildUrl('modules/settings/index.php#security')],
-            ['title' => 'Document Settings', 'url' => buildUrl('modules/settings/index.php#documents')],
-            ['title' => 'Email Settings', 'url' => buildUrl('modules/settings/index.php#email')],
-            ['title' => 'Backup', 'url' => buildUrl('modules/settings/index.php#backup')],
-            ['title' => 'Audit Logs', 'url' => buildUrl('modules/settings/index.php#audit')]
-        ]
-    ]
-];
-
-// Normal user specific menus
-$user_menus = [
-    'my_documents' => [
-        'title' => 'My Documents',
-        'icon' => 'fas fa-file',
-        'url' => '#',
-        'roles' => ['super_admin', 'user'],
-        'submenus' => [
-            ['title' => 'Submit Document', 'url' => buildUrl('modules/documents/create.php')],
-            ['title' => 'My Submissions', 'url' => buildUrl('modules/documents/my_documents.php')],
-            ['title' => 'Document Status', 'url' => buildUrl('modules/documents/status.php')]
-        ]
-    ],
-    'tracking' => [
-        'title' => 'Tracking',
-        'icon' => 'fas fa-chart-line',
-        'url' => '#',
-        'roles' => ['super_admin', 'user'],
-        'submenus' => [
-            ['title' => 'Track Document', 'url' => buildUrl('modules/tracking/track.php')],
-            ['title' => 'History', 'url' => buildUrl('modules/tracking/history.php')]
-        ]
-    ]
-];
-
-// Common menus for all (appears after role-specific menus)
-$common_menus_extra = [
-    'reports' => [
-        'title' => 'Reports',
-        'icon' => 'fas fa-chart-bar',
-        'url' => buildUrl('modules/reports/index.php'),
-        'roles' => ['super_admin', 'records_officer', 'admin', 'user']
-    ],
-    'search' => [
-        'title' => 'Search',
-        'icon' => 'fas fa-search',
-        'url' => buildUrl('modules/search/index.php'),
-        'roles' => ['super_admin', 'records_officer', 'admin', 'user']
-    ],
-    'profile' => [
-        'title' => 'My Profile',
-        'icon' => 'fas fa-user-circle',
-        'url' => buildUrl('modules/users/profile.php'),
-        'roles' => ['super_admin', 'records_officer', 'admin', 'user']
-    ]
-];
-
-// Merge menus based on role
-$menus = array_merge($common_menus);
-
-// Super Admin gets ALL menus
+// SUPER ADMIN gets all menus
 if ($user_role === 'super_admin') {
-    $menus = array_merge($menus, $super_admin_menus);
-    $menus = array_merge($menus, $records_officer_menus);
-    $menus = array_merge($menus, $admin_menus);
-    $menus = array_merge($menus, $user_menus);
-} elseif ($user_role === 'records_officer') {
-    $menus = array_merge($menus, $records_officer_menus);
-} elseif ($user_role === 'admin') {
-    $menus = array_merge($menus, $admin_menus);
-} elseif ($user_role === 'user') {
-    $menus = array_merge($menus, $user_menus);
-}
+    $menus = [
+        'dashboard' => [
+            'title' => 'Dashboard',
+            'icon' => 'fas fa-tachometer-alt',
+            'url' => buildUrl('modules/users/super_admin_dashboard.php'),
+            'roles' => ['super_admin']
+        ],
+        'folders' => [
+            'title' => 'Folders',
+            'icon' => 'fas fa-folder',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'All Folders', 'url' => buildUrl('modules/folders/index.php')],
+                ['title' => 'Browse Folders', 'url' => buildUrl('modules/folders/browse.php')],
+                ['title' => 'Create Folder', 'url' => buildUrl('modules/folders/create.php')],
+                ['title' => 'Archive Folders', 'url' => buildUrl('modules/folders/archive.php')]
+            ]
+        ],
+        'documents' => [
+            'title' => 'Documents',
+            'icon' => 'fas fa-file-alt',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'All Documents', 'url' => buildUrl('modules/documents/all_documents.php')],
+                ['title' => 'Submit Document', 'url' => buildUrl('modules/documents/create.php')],
+                ['title' => 'Pending Processing', 'url' => buildUrl('modules/documents/pending_processing.php')],
+                ['title' => 'Archived Documents', 'url' => buildUrl('modules/documents/archived.php')],
+                ['title' => 'Confidential Docs', 'url' => buildUrl('modules/documents/confidential.php')]
+            ]
+        ],
+        'reviews' => [
+            'title' => 'Reviews',
+            'icon' => 'fas fa-clipboard-list',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'Pending Reviews', 'url' => buildUrl('modules/documents/pending.php')],
+                ['title' => 'Assigned to Me', 'url' => buildUrl('modules/documents/assigned_to_me.php')],
+                ['title' => 'Completed Reviews', 'url' => buildUrl('modules/documents/completed.php')]
+            ]
+        ],
+        'approvals' => [
+            'title' => 'Approvals',
+            'icon' => 'fas fa-check-circle',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'Pending Approval', 'url' => buildUrl('modules/approvals/pending.php')],
+                ['title' => 'Approval History', 'url' => buildUrl('modules/approvals/history.php')]
+            ]
+        ],
+        'task_management' => [
+            'title' => 'Task Management',
+            'icon' => 'fas fa-tasks',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'Assign Tasks', 'url' => buildUrl('modules/tasks/assign.php')],
+                ['title' => 'My Tasks', 'url' => buildUrl('modules/tasks/my_tasks.php')],
+                ['title' => 'Task Overview', 'url' => buildUrl('modules/tasks/overview.php')]
+            ]
+        ],
+        'file_index' => [
+            'title' => 'File Index',
+            'icon' => 'fas fa-folder-tree',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'View Index', 'url' => buildUrl('modules/index/index.php')],
+                ['title' => 'Export Index', 'url' => buildUrl('modules/index/export.php')],
+                ['title' => 'Generate Reports', 'url' => buildUrl('modules/index/reports.php')]
+            ]
+        ],
+        'user_management' => [
+            'title' => 'User Management',
+            'icon' => 'fas fa-users-cog',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'Add New User', 'url' => buildUrl('modules/users/add_user.php')],
+                ['title' => 'Manage Users', 'url' => buildUrl('modules/users/add_user.php')],
+                ['title' => 'User Activity Log', 'url' => buildUrl('modules/users/activity_log.php')],
+                ['title' => 'User Roles', 'url' => buildUrl('modules/users/roles.php')]
+            ]
+        ],
 
-$menus = array_merge($menus, $common_menus_extra);
+        // Add this before the 'settings' menu
+'departments' => [
+    'title' => 'Departments',
+    'icon' => 'fas fa-building',
+    'url' => '#',
+    'roles' => ['super_admin'],
+    'submenus' => [
+        ['title' => 'Department List', 'url' => buildUrl('modules/departments/index.php')],
+        ['title' => 'Add Department', 'url' => buildUrl('modules/departments/add.php')]
+    ]
+],
+'user_management' => [
+    'title' => 'User Management',
+    'icon' => 'fas fa-users-cog',
+    'url' => '#',
+    'roles' => ['super_admin'],
+    'submenus' => [
+        ['title' => 'User List', 'url' => buildUrl('modules/users/users_list.php')],
+        ['title' => 'Add User', 'url' => buildUrl('modules/users/add_user.php')],
+        ['title' => 'User Activity', 'url' => buildUrl('modules/users/activity_log.php')]
+    ]
+],
+        'settings' => [
+            'title' => 'System Settings',
+            'icon' => 'fas fa-cogs',
+            'url' => '#',
+            'roles' => ['super_admin'],
+            'submenus' => [
+                ['title' => 'General Settings', 'url' => buildUrl('modules/settings/index.php#general')],
+                ['title' => 'Security', 'url' => buildUrl('modules/settings/index.php#security')],
+                ['title' => 'Document Settings', 'url' => buildUrl('modules/settings/index.php#documents')],
+                ['title' => 'Email Settings', 'url' => buildUrl('modules/settings/index.php#email')],
+                ['title' => 'Backup', 'url' => buildUrl('modules/settings/index.php#backup')],
+                ['title' => 'Audit Logs', 'url' => buildUrl('modules/settings/index.php#audit')]
+            ]
+        ],
+        'reports' => [
+            'title' => 'Reports',
+            'icon' => 'fas fa-chart-bar',
+            'url' => buildUrl('modules/reports/index.php'),
+            'roles' => ['super_admin']
+        ],
+        'search' => [
+            'title' => 'Search',
+            'icon' => 'fas fa-search',
+            'url' => buildUrl('modules/search/index.php'),
+            'roles' => ['super_admin', 'records_officer', 'admin', 'user']
+        ],
+        'profile' => [
+            'title' => 'My Profile',
+            'icon' => 'fas fa-user-circle',
+            'url' => buildUrl('modules/users/profile.php'),
+            'roles' => ['super_admin', 'records_officer', 'admin', 'user']
+        ]
+    ];
+}
+// RECORDS OFFICER menus
+elseif ($user_role === 'records_officer') {
+    $menus = [
+        'dashboard' => [
+            'title' => 'Dashboard',
+            'icon' => 'fas fa-tachometer-alt',
+            'url' => buildUrl('modules/users/records_dashboard.php'),
+            'roles' => ['records_officer']
+        ],
+        'folders' => [
+            'title' => 'Folders',
+            'icon' => 'fas fa-folder',
+            'url' => '#',
+            'roles' => ['records_officer'],
+            'submenus' => [
+                ['title' => 'All Folders', 'url' => buildUrl('modules/folders/index.php')],
+                ['title' => 'Browse Folders', 'url' => buildUrl('modules/folders/browse.php')],
+                ['title' => 'Create Folder', 'url' => buildUrl('modules/folders/create.php')],
+                ['title' => 'Manage Categories', 'url' => buildUrl('modules/categories/index.php')],
+                ['title' => 'Archive Folders', 'url' => buildUrl('modules/folders/archive.php')]
+            ]
+        ],
+        'documents' => [
+            'title' => 'Documents',
+            'icon' => 'fas fa-file-alt',
+            'url' => '#',
+            'roles' => ['records_officer'],
+            'submenus' => [
+                ['title' => 'All Documents', 'url' => buildUrl('modules/documents/all_documents.php')],
+                ['title' => 'Submit Document', 'url' => buildUrl('modules/documents/create.php')],
+                ['title' => 'Pending Processing', 'url' => buildUrl('modules/documents/pending_processing.php')],
+                ['title' => 'Archived Documents', 'url' => buildUrl('modules/documents/archived.php')],
+                ['title' => 'Confidential Docs', 'url' => buildUrl('modules/documents/confidential.php')]
+            ]
+        ],
+        'file_index' => [
+            'title' => 'File Index',
+            'icon' => 'fas fa-index',
+            'url' => '#',
+            'roles' => ['records_officer'],
+            'submenus' => [
+                ['title' => 'View Index', 'url' => buildUrl('modules/index/index.php')],
+                ['title' => 'Export Index', 'url' => buildUrl('modules/index/export.php')],
+                ['title' => 'Generate Reports', 'url' => buildUrl('modules/index/reports.php')]
+            ]
+        ],
+        'reports' => [
+            'title' => 'Reports',
+            'icon' => 'fas fa-chart-bar',
+            'url' => buildUrl('modules/reports/index.php'),
+            'roles' => ['records_officer']
+        ],
+        'search' => [
+            'title' => 'Search',
+            'icon' => 'fas fa-search',
+            'url' => buildUrl('modules/search/index.php'),
+            'roles' => ['records_officer']
+        ],
+        'profile' => [
+            'title' => 'My Profile',
+            'icon' => 'fas fa-user-circle',
+            'url' => buildUrl('modules/users/profile.php'),
+            'roles' => ['records_officer']
+        ]
+    ];
+}
+// ADMIN menus
+elseif ($user_role === 'admin') {
+    $menus = [
+        'dashboard' => [
+            'title' => 'Dashboard',
+            'icon' => 'fas fa-tachometer-alt',
+            'url' => buildUrl('modules/users/admin_dashboard.php'),
+            'roles' => ['admin']
+        ],
+        'folders' => [
+            'title' => 'Folders',
+            'icon' => 'fas fa-folder',
+            'url' => '#',
+            'roles' => ['admin'],
+            'submenus' => [
+                ['title' => 'All Folders', 'url' => buildUrl('modules/folders/index.php')],
+                ['title' => 'Browse Folders', 'url' => buildUrl('modules/folders/browse.php')]
+            ]
+        ],
+        'reviews' => [
+            'title' => 'Reviews',
+            'icon' => 'fas fa-clipboard-list',
+            'url' => '#',
+            'roles' => ['admin'],
+            'submenus' => [
+                ['title' => 'Pending Reviews', 'url' => buildUrl('modules/documents/pending.php')],
+                ['title' => 'Assigned to Me', 'url' => buildUrl('modules/documents/assigned_to_me.php')],
+                ['title' => 'Completed Reviews', 'url' => buildUrl('modules/documents/completed.php')]
+            ]
+        ],
+        'approvals' => [
+            'title' => 'Approvals',
+            'icon' => 'fas fa-check-circle',
+            'url' => '#',
+            'roles' => ['admin'],
+            'submenus' => [
+                ['title' => 'Pending Approval', 'url' => buildUrl('modules/approvals/pending.php')],
+                ['title' => 'Approval History', 'url' => buildUrl('modules/approvals/history.php')]
+            ]
+        ],
+        'task_management' => [
+            'title' => 'Task Management',
+            'icon' => 'fas fa-tasks',
+            'url' => '#',
+            'roles' => ['admin'],
+            'submenus' => [
+                ['title' => 'Assign Tasks', 'url' => buildUrl('modules/tasks/assign.php')],
+                ['title' => 'My Tasks', 'url' => buildUrl('modules/tasks/my_tasks.php')],
+                ['title' => 'Task Overview', 'url' => buildUrl('modules/tasks/overview.php')]
+            ]
+        ],
+        'reports' => [
+            'title' => 'Reports',
+            'icon' => 'fas fa-chart-bar',
+            'url' => buildUrl('modules/reports/index.php'),
+            'roles' => ['admin']
+        ],
+        'search' => [
+            'title' => 'Search',
+            'icon' => 'fas fa-search',
+            'url' => buildUrl('modules/search/index.php'),
+            'roles' => ['admin']
+        ],
+        'profile' => [
+            'title' => 'My Profile',
+            'icon' => 'fas fa-user-circle',
+            'url' => buildUrl('modules/users/profile.php'),
+            'roles' => ['admin']
+        ]
+    ];
+}
+// NORMAL USER menus - Limited access
+elseif ($user_role === 'user') {
+    $menus = [
+        'dashboard' => [
+            'title' => 'Dashboard',
+            'icon' => 'fas fa-tachometer-alt',
+            'url' => buildUrl('modules/users/user_dashboard.php'),
+            'roles' => ['user']
+        ],
+        'my_documents' => [
+            'title' => 'My Documents',
+            'icon' => 'fas fa-file-alt',
+            'url' => '#',
+            'roles' => ['user'],
+            'submenus' => [
+                ['title' => 'Submit Document', 'url' => buildUrl('modules/documents/create.php')],
+                ['title' => 'My Submissions', 'url' => buildUrl('modules/documents/my_documents.php')],
+                ['title' => 'Document Status', 'url' => buildUrl('modules/documents/status.php')]
+            ]
+        ],
+        'tracking' => [
+            'title' => 'Tracking',
+            'icon' => 'fas fa-chart-line',
+            'url' => '#',
+            'roles' => ['user'],
+            'submenus' => [
+                ['title' => 'Track Document', 'url' => buildUrl('modules/tracking/track.php')],
+                ['title' => 'History', 'url' => buildUrl('modules/tracking/history.php')]
+            ]
+        ],
+        'search' => [
+            'title' => 'Search',
+            'icon' => 'fas fa-search',
+            'url' => buildUrl('modules/search/index.php'),
+            'roles' => ['user']
+        ],
+        'profile' => [
+            'title' => 'My Profile',
+            'icon' => 'fas fa-user-circle',
+            'url' => buildUrl('modules/users/profile.php'),
+            'roles' => ['user']
+        ]
+    ];
+}
 
 // Helper function to check if menu item is active
 function isActive($url) {
     global $current_page, $current_module;
     if ($url == '#') return false;
     $base = basename($url);
-    // Remove anchor/hash from URL for comparison
-    $url = strtok($url, '#');
     return strpos($base, $current_page) !== false || strpos($url, $current_module) !== false;
 }
 ?>

@@ -313,6 +313,21 @@ include_once '../../includes/sidebar.php';
                 </div>
                 
                 <div class="form-group">
+    <label>Department</label>
+    <select name="department_id">
+        <option value="">Select Department</option>
+        <?php
+        $depts = $conn->query("SELECT id, name, dept_code FROM departments WHERE is_active = 1 ORDER BY name");
+        while ($dept = $depts->fetch_assoc()):
+        ?>
+            <option value="<?php echo $dept['id']; ?>">
+                <?php echo htmlspecialchars($dept['name']); ?> (<?php echo $dept['dept_code']; ?>)
+            </option>
+        <?php endwhile; ?>
+    </select>
+    <small>Assign user to a department</small>
+</div>
+                <div class="form-group">
                     <label>Department</label>
                     <input type="text" name="department" value="<?php echo htmlspecialchars($_POST['department'] ?? ''); ?>">
                 </div>
